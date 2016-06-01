@@ -1,45 +1,25 @@
-SELECT *
-FROM
-  (SELECT id,
-          canvas_id,
-          name,
-          sortable_name
-   FROM user_dim) u
-INNER JOIN
-  (SELECT user_id,
-          course_id,
-          type,
-          workflow_state
-   FROM enrollment_dim
-   WHERE type = 'StudentEnrollment'
-     AND workflow_state = 'active') e ON e.user_id=u.id
-INNER JOIN
-  (SELECT id,
-          canvas_id,
-          name,
-          code
-   FROM course_dim) c ON c.id=e.course_id
-INNER JOIN
-  (SELECT id,
-          course_id,
-          canvas_id,
-          title,
-          workflow_state
-   FROM assignment_dim
-   WHERE workflow_state = 'published') a ON a.course_id=c.id
-INNER JOIN
-  (SELECT assignment_id,
-          canvas_id,
-          graded_at,
-          attempt,
-          excused,
-          grade_state,
-          workflow_state
-   FROM submission_dim
-   WHERE workflow_state IN ('unsubmitted',
-                            'graded')) s ON s.assignment_id=a.id
-WHERE NOT EXISTS
-    (SELECT 1
-     FROM submission_dim
-     WHERE submission_dim.assignment_id=a.id
-       AND submission_dim.user_id = u.id);
+SELECT
+  u.id,
+  u.canvas_id,
+  u.name,
+  u.sortable_name,
+  c.id,
+  c.name,
+  c.code,
+  a.id,
+  a.title,
+  sd.graded_at,
+  sd.attempt,
+  sd.excused,
+  sd.grade_state,
+  sd.workflow_state
+FROM enrollment_dim e
+INNER JOIN course_dim c ON e.course_id = c.id
+INNER JOIN assignment_dim a ON c.id = a.course_id
+LEFT OUTER JOIN submission_fact sf ON a.id = sf.assignment_id AND e.user_id = sf.user_id
+LEFT OUTER JOIN submission_dim sd ON sf.submission_id = sd.id
+INNER JOIN user_dim u ON sf.user_id = u.id
+WHERE
+  (e.type = 'StudentEnrollment' AND e.workflow_state = 'active') AND
+  (a.workflow_state = 'published') AND
+  (sd.id IS NULL OR sd.workflow_state IN ('unsubmitted'));
